@@ -1,0 +1,105 @@
+# Istio traffic management, security, and ingress for a demo "checkout" service.
+# Apply: kubectl apply -f istio-traffic.yaml
+# Prereq: namespace labelled istio-injection=enabled, Istio installed.
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: checkout-gateway
+  namespace: default
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "checkout.example.com"
+---
+# Canary: 90% of traffic to v1, 10% to v2. Raise v2's weight to roll forward.
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: checkout
+  namespace: default
+spec:
+  hosts:
+    - "checkout.example.com"
+  gateways:
+    - checkout-gateway
+  http:
+    - route:
+        - destination:
+            host: checkout
+            subset: v1
+          weight: 90
+        - destination:
+            host: checkout
+            subset: v2
+          weight: 10
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+---
+# Subsets + resilience: connection pool limits and outlier detection
+# (circuit breaking) so one bad version can't cascade.
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: checkout
+  namespace: default
+spec:
+  host: checkout
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+    - name: v2
+      labels:
+        version: v2
+---
+# Zero trust: STRICT mTLS for every workload in this namespace.
+# No plaintext pod-to-pod traffic is accepted once this applies.
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: default
+spec:
+  mtls:
+    mode: STRICT
+---
+# Authorization: only the "frontend" service account may GET /api/checkout.
+# mTLS authenticates; this policy authorizes.
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: checkout-access
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: checkout
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/default/sa/frontend"
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/api/checkout"]
