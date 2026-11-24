@@ -14,6 +14,10 @@ A service mesh moves networking concerns **out of your code** and into a dedicat
 **When you need one:** 20+ services, strict security requirements, canary/blue-green releases, or multi-team ownership of one cluster.
 **When you don't:** a handful of services, a single team, or latency budgets tighter than ~1–3 ms per hop.
 
+## 🌍 In plain words — what is this, really?
+
+Picture a large office building where hundreds of employees need to talk to each other, deliver documents safely, and prove who they are every time. If everyone handled their own security, routing, and record-keeping, it would be chaos and every team would do it differently. A service mesh gives every service in Kubernetes a personal assistant — a small sidecar proxy — that handles secure delivery, directions, retries, and logging for it. Like office couriers who check ID badges, take the best route, and note every delivery, the mesh manages communication between services so the services themselves can focus on their real work. Technically, those assistants form the data plane, a control plane called Istiod tells them the rules, and features like mTLS keep every conversation encrypted.
+
 ## Architecture
 
 ![Service Mesh Architecture](architecture.svg)
@@ -74,10 +78,6 @@ kubectl label namespace default istio-injection=enabled
 # Apply the traffic, security, and gateway manifests in this repo
 kubectl apply -f istio-traffic.yaml
 ```
-
-## Quiz Teaser
-
-Can you tell a `VirtualService` from a `DestinationRule` — and explain why mTLS alone doesn't authorize anything? Take the 5-question quiz in [`quiz.md`](quiz.md).
 
 ## Further Reading
 
